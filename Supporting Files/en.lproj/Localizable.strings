@@ -14,6 +14,11 @@
 "change_friend_username" = "🤝 Change Friend username";
 "set_friend_username" = "🤝 Set Friend username";
 "remove_friend_username" = "🙋‍♂️ Remove Friend username";
+"set_past_self" = "⏪ Compare with past me";
+"change_past_self" = "⏪ Change past me offset";
+"remove_past_self" = "🙋‍♂️ Stop comparing with past me";
+"past_self_information" = "How many days ago should we compare with?\n(1 = yesterday)";
+"with_past_self" = "\nvs me ${day} day(s) ago";
 "set_goal" = "🏁 Set Goal";
 "help" = "🐛 Bug Report";
 "auto_launch" = "Automatically start Jandi at login";

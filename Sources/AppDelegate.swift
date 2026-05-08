@@ -18,6 +18,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var username = UserDefaults.standard.string(forKey: Consts.usernameDefaultKey) ?? ""
     private var friendUsername = UserDefaults.standard.string(forKey: Consts.friendUsernameDefaultKey) ?? ""
     private var goal = UserDefaults.standard.integer(forKey: Consts.goalDefaultKey)
+    private var selfCompareOffset = UserDefaults.standard.integer(forKey: Consts.selfCompareOffsetDefaultKey)
     private let menu = NSMenu().then {
         $0.title = ""
     }
@@ -73,6 +74,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         $0.tag = 6
         $0.keyEquivalent = "d"
     }
+
+    private let pastSelfMenuItem = NSMenuItem().then {
+        $0.title = Localized.setPastSelf
+        $0.action = #selector(onChangePastSelfClick)
+        $0.tag = 11
+        $0.keyEquivalent = "p"
+    }
+
+    private let removePastSelfMenuItem = NSMenuItem().then {
+        $0.title = Localized.removePastSelf
+        $0.action = #selector(onRemovePastSelfClick)
+        $0.tag = 11
+        $0.keyEquivalent = ""
+    }
     
     private let settingMenuItem = NSMenuItem().then {
         $0.title = Localized.setting
@@ -125,6 +140,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         menu.addItem(friendMenuItem)
         menu.addItem(RemoveFriendMenuItem)
+        menu.addItem(pastSelfMenuItem)
+        menu.addItem(removePastSelfMenuItem)
         menu.addItem(.separator())
         menu.addItem(goalMenuItem)
         menu.addItem(.separator())
@@ -140,19 +157,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func updateUI() {
-        
+
         var withFriend = ""
         if !friendUsername.isEmpty {
             withFriend = Localized.withFriend.replacingOccurrences(of: "${username}", with: friendUsername)
+        } else if selfCompareOffset > 0 {
+            withFriend = Localized.withPastSelf.replacingOccurrences(of: "${day}", with: String(selfCompareOffset))
         }
-        
+
         let userMenuItemTitle = Localized.hello.replacingOccurrences(of: "${username}", with: username).replacingOccurrences(of: "${withFriend}", with: withFriend)
         userMenuItem.attributedTitle = NSAttributedString(string: userMenuItemTitle)
-        
+
         let friendMenuItemTitle = self.friendUsername.isEmpty ? Localized.setFriendUsername : Localized.changeFriendUsername
         friendMenuItem.title = friendMenuItemTitle
-        
-        RemoveFriendMenuItem.isHidden = self.friendUsername.isEmpty
+
+        let pastSelfActive = self.selfCompareOffset > 0
+        let friendActive = !self.friendUsername.isEmpty
+
+        friendMenuItem.isHidden = pastSelfActive
+        RemoveFriendMenuItem.isHidden = !friendActive || pastSelfActive
+
+        pastSelfMenuItem.title = pastSelfActive ? Localized.changePastSelf : Localized.setPastSelf
+        pastSelfMenuItem.isHidden = friendActive
+        removePastSelfMenuItem.isHidden = !pastSelfActive || friendActive
     }
     
     private func showSettingAlert() {
@@ -220,6 +247,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             else {
                 changeFriendUsername(withUsername: friendUsername)
+            }
+        }
+    }
+
+    private func showChangePastSelfAlert() {
+        let alert = NSAlert()
+        let offsetTextField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 20))
+        let formatter = IntegerValueFormatter()
+        offsetTextField.formatter = formatter
+        offsetTextField.placeholderString = self.selfCompareOffset > 0 ? String(self.selfCompareOffset) : "1"
+
+        alert.messageText = Localized.setPastSelf
+        alert.informativeText = Localized.pastSelfInformation
+        alert.alertStyle = .informational
+        alert.accessoryView = offsetTextField
+        alert.addButton(withTitle: Localized.ok)
+        alert.addButton(withTitle: Localized.cancel)
+        alert.window.initialFirstResponder = alert.accessoryView
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            let raw = offsetTextField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            let offset: Int
+            if raw.isEmpty {
+                offset = self.selfCompareOffset > 0 ? self.selfCompareOffset : 1
+            } else {
+                offset = offsetTextField.integerValue
+            }
+            if offset <= 0 {
+                removeSelfCompareInfo()
+            } else {
+                changeSelfCompareOffset(with: offset)
             }
         }
     }
@@ -303,6 +361,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         showChangeGoalAlert()
     }
 
+    @objc func onChangePastSelfClick(){
+        showChangePastSelfAlert()
+    }
+
+    @objc func onRemovePastSelfClick(){
+        removeSelfCompareInfo()
+    }
+
     private func changeUsername(withUsername username: String) {
         UserDefaults.standard.setValue(username, forKey: Consts.usernameDefaultKey)
         self.username = UserDefaults.standard.string(forKey: Consts.usernameDefaultKey)!
@@ -313,15 +379,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func changeFriendUsername(withUsername username: String) {
         UserDefaults.standard.setValue(username, forKey: Consts.friendUsernameDefaultKey)
         self.friendUsername = UserDefaults.standard.string(forKey: Consts.friendUsernameDefaultKey)!
-        
+
+        UserDefaults.standard.setValue(0, forKey: Consts.selfCompareOffsetDefaultKey)
+        self.selfCompareOffset = 0
+
         refresh()
     }
-    
+
     private func removeFriendinfo(){
         UserDefaults.standard.setValue("", forKey: Consts.friendUsernameDefaultKey)
         self.friendUsername = ""
         self.friendContributes = []
-        
+
+        refresh()
+    }
+
+    private func changeSelfCompareOffset(with offset: Int) {
+        UserDefaults.standard.setValue(offset, forKey: Consts.selfCompareOffsetDefaultKey)
+        self.selfCompareOffset = UserDefaults.standard.integer(forKey: Consts.selfCompareOffsetDefaultKey)
+
+        UserDefaults.standard.setValue("", forKey: Consts.friendUsernameDefaultKey)
+        self.friendUsername = ""
+        self.friendContributes = []
+
+        refresh()
+    }
+
+    private func removeSelfCompareInfo() {
+        UserDefaults.standard.setValue(0, forKey: Consts.selfCompareOffsetDefaultKey)
+        self.selfCompareOffset = 0
+        self.friendContributes = []
+
         refresh()
     }
     
@@ -484,6 +572,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             } else{
                 self.myContributes = contributeDataList
                 self.mystreaks = self.parseHtmltoDataForCount(html: html)
+                if self.friendUsername.isEmpty && self.selfCompareOffset > 0 {
+                    self.friendContributes = self.parseHtmltoData(html: html, daysBack: self.selfCompareOffset)
+                }
             }
             
             if group != nil {
@@ -531,17 +622,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return integerValue
     }
     
-    private func parseHtmltoData(html: String) -> [ContributeData] {
+    private func parseHtmltoData(html: String, daysBack: Int = 0) -> [ContributeData] {
         let isoDateFormatter = ISO8601DateFormatter()
         isoDateFormatter.formatOptions = [.withFullDate]
-    
+
         do {
             let doc: Document = try SwiftSoup.parse(html)
             let rects: Elements = try doc.getElementsByTag(ParseKeys.rect)
             let tooltips: Elements = try doc.getElementsByTag(ParseKeys.tooltip)
             let days: [Element] = rects.array().filter { $0.hasAttr(ParseKeys.date) }
             let sortedDays = sortDaysByDate(days, with: isoDateFormatter)
-            let weekend = sortedDays.suffix(Consts.fetchCount)
+            let trimmedDays = daysBack > 0 ? sortedDays.dropLast(daysBack) : ArraySlice(sortedDays)
+            let weekend = trimmedDays.suffix(Consts.fetchCount)
             
             var tooltipsTextById = [String: String]()
             for tooltip in tooltips.array() {

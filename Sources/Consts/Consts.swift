@@ -16,4 +16,5 @@ enum Consts {
     static let usernameDefaultKey = "username"
     static let friendUsernameDefaultKey = "friend_username"
     static let goalDefaultKey = "goal"
+    static let selfCompareOffsetDefaultKey = "self_compare_offset"
 }

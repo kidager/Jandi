@@ -14,6 +14,11 @@
 "change_friend_username" = "🤝 친구 아이디 변경";
 "set_friend_username" = "🤝 친구 아이디 설정";
 "remove_friend_username" = "🙋‍♂️ 친구 아이디 제거";
+"set_past_self" = "⏪ 과거의 나와 비교";
+"change_past_self" = "⏪ 과거의 나 일수 변경";
+"remove_past_self" = "🙋‍♂️ 과거의 나 비교 중지";
+"past_self_information" = "며칠 전의 나와 비교할까요?\n(1 = 어제)";
+"with_past_self" = "\n${day}일 전의 나와 비교";
 "set_goal" = "🏁 목표 설정";
 "help" = "🐛 버그 제보하기";
 "auto_launch" = "재시작시 자동 실행";
