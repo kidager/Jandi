@@ -361,11 +361,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         showChangeGoalAlert()
     }
 
-    @objc func onChangePastSelfClick(){
+    @objc func onChangePastSelfClick() {
         showChangePastSelfAlert()
     }
 
-    @objc func onRemovePastSelfClick(){
+    @objc func onRemovePastSelfClick() {
         removeSelfCompareInfo()
     }
 
@@ -566,14 +566,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
             
-            let contributeDataList = self.parseHtmltoData(html: html)
+            let sortedDays = self.parseSortedDays(html: html)
+            let contributeDataList = self.parseHtmltoData(days: sortedDays)
             if isFriend {
                 self.friendContributes = contributeDataList
             } else{
                 self.myContributes = contributeDataList
-                self.mystreaks = self.parseHtmltoDataForCount(html: html)
+                self.mystreaks = self.parseHtmltoDataForCount(days: sortedDays)
                 if self.friendUsername.isEmpty && self.selfCompareOffset > 0 {
-                    self.friendContributes = self.parseHtmltoData(html: html, daysBack: self.selfCompareOffset)
+                    self.friendContributes = self.parseHtmltoData(days: sortedDays, daysBack: self.selfCompareOffset)
                 }
             }
             
@@ -622,7 +623,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return integerValue
     }
     
-    private func parseHtmltoData(html: String, daysBack: Int = 0) -> [ContributeData] {
+    private func parseSortedDays(html: String) -> [Element] {
         let isoDateFormatter = ISO8601DateFormatter()
         isoDateFormatter.formatOptions = [.withFullDate]
 
@@ -632,32 +633,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let tooltips: Elements = try doc.getElementsByTag(ParseKeys.tooltip)
             let days: [Element] = rects.array().filter { $0.hasAttr(ParseKeys.date) }
             let sortedDays = sortDaysByDate(days, with: isoDateFormatter)
-            let trimmedDays = daysBack > 0 ? sortedDays.dropLast(daysBack) : ArraySlice(sortedDays)
-            let weekend = trimmedDays.suffix(Consts.fetchCount)
-            
+
             var tooltipsTextById = [String: String]()
             for tooltip in tooltips.array() {
                 let id = try tooltip.attr("for")
                 let text = try tooltip.text()
                 tooltipsTextById[id] = text
             }
-            
-            let updatedWeekend = weekend.map { element -> Element in
+
+            for element in sortedDays {
                 let id = element.id()
                 if let tooltipText = tooltipsTextById[id] {
                     _ = try? element.text(tooltipText)
                 }
-                return element
             }
-         
-            let contributeDataList = updatedWeekend.map(mapFunction)
-            return contributeDataList
-            
+
+            return sortedDays
         } catch {
             return []
         }
     }
-    
+
+    private func parseHtmltoData(days: [Element], daysBack: Int = 0) -> [ContributeData] {
+        let trimmedDays = daysBack > 0 ? days.dropLast(daysBack) : ArraySlice(days)
+        let weekend = trimmedDays.suffix(Consts.fetchCount)
+        return weekend.map(mapFunction)
+    }
+
     private func sortDaysByDate(_ days: [Element], with dateFormatter: ISO8601DateFormatter) -> [Element] {
         return days.sorted { (element1, element2) -> Bool in
             guard let date1 = try? element1.attr(ParseKeys.date),
@@ -669,69 +671,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return date1Value < date2Value
         }
     }
-    
-    private func parseHtmltoDataForCount(html: String) -> ContributeData {
-        do {
-            let doc: Document = try SwiftSoup.parse(html)
-            let rects: Elements = try doc.getElementsByTag(ParseKeys.rect)
-            let tooltips: Elements = try doc.getElementsByTag(ParseKeys.tooltip)
-            let days: [Element] = rects.array().filter { $0.hasAttr(ParseKeys.date) }
-            
-            var tooltipsTextById = [String: String]()
-            for tooltip in tooltips.array() {
-                let id = try tooltip.attr("for")
-                let text = try tooltip.text()
-                tooltipsTextById[id] = text
+
+    private func parseHtmltoDataForCount(days: [Element]) -> ContributeData {
+        var currentStreak = 0
+        let today = Calendar.current.startOfDay(for: Date())
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+
+        for day in days.reversed() {
+            let contribute = mapFunction(ele: day)
+            guard let contributionDate = dateFormatter.date(from: contribute.date) else { continue }
+
+            let dayDifference = Calendar.current.dateComponents([.day], from: contributionDate, to: today).day ?? 0
+
+            if currentStreak == 0 && dayDifference > 1 {
+                break
             }
-            
-            let sortedDays = days.sorted { (element1, element2) -> Bool in
-                guard let date1 = try? element1.attr(ParseKeys.date),
-                      let date2 = try? element2.attr(ParseKeys.date) else {
-                    return false
-                }
-                return date1 < date2
+
+            if contribute.count > 0 {
+                currentStreak += 1
+            } else {
+                break
             }
-            
-            let updatedDays = sortedDays.map { element -> Element in
-                let id = element.id()
-                if let tooltipText = tooltipsTextById[id] {
-                   _ = try? element.text(tooltipText)
-                }
-                return element
-            }
-            
-            var currentStreak = 0
-            let today = Calendar.current.startOfDay(for: Date())
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "yyyy-MM-dd"
-            
-            for day in updatedDays.reversed() {
-                let contribute = mapFunction(ele: day)
-                guard let contributionDate = dateFormatter.date(from: contribute.date) else { continue }
-                
-                let dayDifference = Calendar.current.dateComponents([.day], from: contributionDate, to: today).day ?? 0
-                
-                if currentStreak == 0 && dayDifference > 1 {
-                    break
-                }
-                
-                if contribute.count > 0 {
-                    currentStreak += 1
-                } else {
-                    break
-                }
-            }
-            
-            if let lastDay = updatedDays.last {
-                let lastContribute = mapFunction(ele: lastDay)
-                return ContributeData(
-                    count: currentStreak,
-                    weekend: lastContribute.weekend,
-                    date: lastContribute.date
-                )
-            }
-        } catch {
-            print("Failed to parse streaks data: \(error)")
+        }
+
+        if let lastDay = days.last {
+            let lastContribute = mapFunction(ele: lastDay)
+            return ContributeData(
+                count: currentStreak,
+                weekend: lastContribute.weekend,
+                date: lastContribute.date
+            )
         }
         return ContributeData(count: 0, weekend: "", date: "")
     }
